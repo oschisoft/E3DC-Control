@@ -841,7 +841,7 @@ bDischarge = false;
                 printf("ML1 %i RQ %i ",iMinLade,iFc);
             else
                 printf("ML1 %i ML2 %i RQ %i ",iMinLade, iMinLade2,iFc);
-            printf("GMT %2ld:%2ld RZK/s %i ",tLadezeitende/3600,tLadezeitende%3600/60, int(tJZK));
+            printf("GMT %2ld:%2ld RZK/s %i ",tLadezeitende/3600,tLadezeitende%3600/60, int((cRegelzeitende-cRegelzeitbeginn)/2-tJZK));
             // RZK/s ist die Regelzeitkorrektur in Sekunden, also die Verkürzung der Regelzeit (Sommer 21.06.), die durch Anwendung von jzkorr entsteht
         
     printf("E3DC: %s", asctime(ts));
