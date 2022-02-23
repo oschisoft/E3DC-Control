@@ -1,7 +1,40 @@
 # /etc/e3dc.config.txt - Configuration file for E3DC Rscp application
 
-server_ip = 192.168.178.33
+server_ip = 192.168.xxx.xxx
 server_port = 5033
-e3dc_user = xxxxxx@xxxx.xx
-e3dc_password = xxxxxxx
-aes_password = xxxx
+e3dc_user = xxx@xxx.xx
+e3dc_password = xxxxxxxxx
+aes_password = xxxxxxxxx
+
+breite = 52.516
+# Breitengrad dezimal E3DC-Standort: 52.516°
+laenge = 10.145
+# Längengrand dezimal E3DC-Standort: 10.145°
+
+wallbox = false         
+ext1 = false				
+ext2 = false
+wurzelzaehler = 0		
+einspeiselimit = 5.3
+untererLadekorridor = 300  
+obererLadekorridor = 1800  
+minimumLadeleistung = 300
+maximumLadeleistung = 3000  
+wrleistung = 12000     
+ladeschwelle = 30  
+ladeende = 97
+ladeende2 = 99
+jahreszeitkorrektur = 50
+regelzeitbeginn = 9.0
+regelzeitende = 14.0
+sommerladeende = 14.2
+speichergroesse = 12.0
+unload = 100
+#htmin = 10
+#htsockel = 10
+#hton = 5                  
+#htoff = 14                
+#htsat = true              
+#htsun = true              
+debug = false
+#logfile = logfile

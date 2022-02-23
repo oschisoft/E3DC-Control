@@ -1,3 +1,4 @@
+// ---- Hauptprogramm E3DC-Laderegelung, Version 2022.02.15 ---- //
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -63,7 +64,7 @@ static int hh,mm,ss;
 static int32_t iFc, iMinLade,iMinLade2; // Mindestladeladeleistung des E3DC Speichers
 static float_t fL1V=230,fL2V=230,fL3V=230;
 static int iDischarge = -1;
-static bool bDischarge = true,bDischargeDone;  // Wenn false, wird das Entladen blockiert, unabhängig von dem vom Portal gesetzen wert
+static bool bDischarge = false, bDischargeDone;  // Wenn false, wird das Entladen blockiert, unabhängig von dem vom Portal gesetzen wert
 char cWBALG;
 static bool bWBLademodus; // Lademodus der Wallbox; z.B. Sonnenmodus
 static bool bWBChanged; // Lademodus der Wallbox; wurde extern geändertz.B. Sonnenmodus
@@ -123,7 +124,8 @@ int MQTTsend(char buffer[127])
 {
     char cbuf[127];
     if (e3dc_config.openWB) {
-        sprintf(cbuf, "mosquitto_pub -r -h %s -t %s", e3dc_config.openWBhost,buffer);
+        sprintf(cbuf, "mosquitto_pub -r -h %s", e3dc_config.openWBhost);
+        sprintf(cbuf, " -t %s", buffer);
         system(cbuf);
     }
     return(0);
@@ -131,12 +133,12 @@ int MQTTsend(char buffer[127])
 int ControlLoadData(SRscpFrameBuffer * frameBuffer,int32_t Power,int32_t Mode ) {
     RscpProtocol protocol;
     SRscpValue rootValue;
-    // The root container is create with the TAG ID 0 which is not used by any device.
+    // The root container is created from the TAG ID 0 which is not used by any device.
     protocol.createContainerValue(&rootValue, 0);
     
     // request Power Meter information
     SRscpValue PMContainer;
-//    Power = Power*-1;
+	//    Power = Power*-1;
     protocol.createContainerValue(&PMContainer, TAG_EMS_REQ_SET_POWER);
     protocol.appendValue(&PMContainer, TAG_EMS_REQ_SET_POWER_MODE,Mode);
     if (Mode > 0)
@@ -223,10 +225,10 @@ int Control_MAX_DISCHARGE(SRscpFrameBuffer * frameBuffer,int32_t iPower) {
 int createRequestWBData(SRscpFrameBuffer * frameBuffer) {
     RscpProtocol protocol;
     SRscpValue rootValue;
-    if (iWBStatus<12)
+
     iWBStatus=12;
     
-    // The root container is create with the TAG ID 0 which is not used by any device.
+    // The root container is created from the TAG ID 0 which is not used by any device.
     protocol.createContainerValue(&rootValue, 0);
     
     // request Power Meter information
@@ -269,10 +271,10 @@ int createRequestWBData(SRscpFrameBuffer * frameBuffer) {
 int createRequestWBData2(SRscpFrameBuffer * frameBuffer) {
     RscpProtocol protocol;
     SRscpValue rootValue;
-    if (iWBStatus<12)
+
     iWBStatus=12;
     
-    // The root container is create with the TAG ID 0 which is not used by any device.
+    // The root container is created from the TAG ID 0 which is not used by any device.
     protocol.createContainerValue(&rootValue, 0);
     
     // request Power Meter information
@@ -349,7 +351,7 @@ bool GetConfig()
         sprintf(fbuf,"%s.check",e3dc_config.conffile);
         sfp = fopen(fbuf, "w");
 
-
+		// Vorbelegung der Werte aus E3DC_CONFIG.h, bzw. direkte Zuweisung
         stat(e3dc_config.conffile,&stats);
         tm_CONF_dt = *(&stats.st_mtime);
         char var[128], value[128], line[256];
@@ -369,13 +371,14 @@ bool GetConfig()
         e3dc_config.maximumLadeleistung = MAXIMUMLADELEISTUNG;
         e3dc_config.wrleistung = WRLEISTUNG;
         e3dc_config.speichergroesse = SPEICHERGROESSE;
-        e3dc_config.winterminimum = WINTERMINIMUM;
-        e3dc_config.sommermaximum = SOMMERMAXIMUM;
+        e3dc_config.regelzeitende = REGELZEITENDE;
+        e3dc_config.regelzeitbeginn = REGELZEITBEGINN;
         e3dc_config.sommerladeende = SOMMERLADEENDE;
         e3dc_config.einspeiselimit = EINSPEISELIMIT;
         e3dc_config.ladeschwelle = LADESCHWELLE;
         e3dc_config.ladeende = LADEENDE;
         e3dc_config.ladeende2 = LADEENDE2;
+        e3dc_config.jahreszeitkorrektur = JZKORR;
         e3dc_config.unload = 100;
         e3dc_config.ht = 0;
         e3dc_config.htsat = false;
@@ -387,16 +390,16 @@ bool GetConfig()
         e3dc_config.wbmode = 4;
         e3dc_config.wbminlade = 1000;
         e3dc_config.wbminSoC = 10;
-        e3dc_config.hoehe = 50;
-        e3dc_config.laenge = 10;
-        e3dc_config.aWATTar = 0;
+        e3dc_config.breite = 50; 	// Standort E3DC in e3dc_config eintragen!
+        e3dc_config.laenge = 10;    // Standort E3DC in e3dc_config eintragen!
+        e3dc_config.aWATTar = false;
         e3dc_config.Avhourly = 10;   // geschätzter stündlicher Verbrauch in %
         e3dc_config.AWDiff = 100;   // Differenzsockel in €/MWh
         e3dc_config.AWAufschlag = 1.2;
         e3dc_config.AWtest = 0;
 
         bf = true;
-
+		// Auslesen der Konfigwerte aus Konfig-Datei, soweit dort angegeben
             while (fgets(line, sizeof(line), fp)) {
                 fpread = true;
                 memset(var, 0, sizeof(var));
@@ -454,10 +457,10 @@ bool GetConfig()
                         e3dc_config.wrleistung = atoi(value);
                     else if(strcmp(var, "speichergroesse") == 0)
                         e3dc_config.speichergroesse = atof(value);
-                    else if(strcmp(var, "winterminimum") == 0)
-                        e3dc_config.winterminimum = atof(value);
-                    else if(strcmp(var, "sommermaximum") == 0)
-                        e3dc_config.sommermaximum = atof(value);
+                    else if(strcmp(var, "regelzeitende") == 0)
+                        e3dc_config.regelzeitende = atof(value);
+                    else if(strcmp(var, "regelzeitbeginn") == 0)
+                        e3dc_config.regelzeitbeginn = atof(value);
                     else if(strcmp(var, "sommerladeende") == 0)
                         e3dc_config.sommerladeende = atof(value);
                     else if(strcmp(var, "einspeiselimit") == 0)
@@ -470,6 +473,8 @@ bool GetConfig()
                         e3dc_config.ladeende2 = atoi(value);
                     else if(strcmp(var, "unload") == 0)
                         e3dc_config.unload = atoi(value);
+                    else if(strcmp(var, "jahreszeitkorrektur") == 0)
+                        e3dc_config.jahreszeitkorrektur = atoi(value);                        
                     else if(strcmp(var, "htmin") == 0)
                         e3dc_config.ht = atoi(value);
                     else if(strcmp(var, "htsockel") == 0)
@@ -480,8 +485,8 @@ bool GetConfig()
                         e3dc_config.wbminlade = atoi(value);
                     else if(strcmp(var, "wbminSoC") == 0)
                         e3dc_config.wbminSoC = atof(value);
-                    else if(strcmp(var, "hoehe") == 0)
-                        e3dc_config.hoehe = atof(value);
+                    else if(strcmp(var, "breite") == 0)
+                        e3dc_config.breite = atof(value);
                     else if(strcmp(var, "laenge") == 0)
                         e3dc_config.laenge = atof(value);
                     else if(strcmp(var, "peakshave") == 0)
@@ -496,11 +501,9 @@ bool GetConfig()
                     else if((strcmp(var, "htsun") == 0)&&
                             (strcmp(value, "true") == 0))
                         e3dc_config.htsun = true;
-                    else if(strcmp(var, "aWATTar") == 0)
-                    {if (strcmp(value, "true") == 0)
-                                 e3dc_config.aWATTar = 1;
-                        else
-                                 e3dc_config.aWATTar = atoi(value);}
+                    else if((strcmp(var, "aWATTar") == 0)&&
+                            (strcmp(value, "true") == 0))
+                        e3dc_config.aWATTar = true;
                     else if(strcmp(var, "Avhourly") == 0)
                         e3dc_config.Avhourly = atof(value); // % der SoC
                     else if(strcmp(var, "AWDiff") == 0)
@@ -524,6 +527,7 @@ bool GetConfig()
     //        printf("e3dc_user %s\n",e3dc_config.e3dc_user);
     //        printf("e3dc_password %s\n",e3dc_config.e3dc_password);
     //        printf("aes_password %s\n",e3dc_config.aes_password);
+    //        printf(" jzkorr %00.0f\n",e3dc_config.jahreszeitkorrektur);
             fclose(fp);
             fclose(sfp);
         }
@@ -532,14 +536,12 @@ bool GetConfig()
     return fpread;
 }
 
-time_t tLadezeitende,tLadezeitende1,tLadezeitende2,tLadezeitende3;  // dynamische Ladezeitberechnung aus dem Cosinus des lfd Tages. 23 Dez = Minimum, 23 Juni = Maximum
+time_t tLadezeitende,tRegelzeitende,tLadezeitende2,tRegelzeitbeginn;  // dynamische Ladezeitberechnung aus dem Cosinus des lfd Tages. 23 Dez = Minimum, 23 Juni = Maximum
 
 
         
-
-
 int LoadDataProcess(SRscpFrameBuffer * frameBuffer) {
-//    const int cLadezeitende1 = 12.5*3600;  // Sommerzeit -2h da GMT = MEZ - 2
+//    const int cRegelzeitende = 12.5*3600;  // Sommerzeit -2h da GMT = MEZ - 2
     printf("\n");
     tm *ts;
     ts = gmtime(&tE3DC);
@@ -584,28 +586,31 @@ int LoadDataProcess(SRscpFrameBuffer * frameBuffer) {
 #
     
     
+    // --- ÄNDERUNGEN FEB. 2020 ----//
     
-    
-    float fLadeende = e3dc_config.ladeende;
+    float fLadeende = e3dc_config.ladeende;   //float Vorgabe Batteriestand in % zum Ladeende z.B. 96 = 96%
     float fLadeende2 = e3dc_config.ladeende2;
     float fLadeende3 = e3dc_config.unload;
+    float jzkorr = e3dc_config.jahreszeitkorrektur;
+				//Jahreszeitkorrektur des Regelzeitraumes in Prozent: max. Regelzeitraum wird für Sommer (21.06.) angegeben. 
+				// Jahreszeitkorrektur 55% bedeutet, dass sich der Regelzeitraum am 21.12. auf 55% des Sommer-Regelzeitraumes verkleinert. 
+				// Dazwischen wird über cos-Funktion interpoliert. 100% bedeutet, der Regelzeitraum wird nicht reduziert/korrigiert
+   
+    int cRegelzeitende = (e3dc_config.regelzeitende)*3600; // Tageszeit in Sekunden: Regelzeit-Ende
+    int cLadezeitende = (e3dc_config.sommerladeende)*3600; // Sommer Ladezeitende, soll hinter Regelzeit-Ende liegen
+    int cRegelzeitbeginn = (e3dc_config.regelzeitbeginn)*3600; //Tageszeit in Sekunden: Regelzeit-Beginn
 
-    if (cos((ts->tm_yday+9)*2*3.14/365) > 0)
-    {
-    fLadeende = (cos((ts->tm_yday+9)*2*3.14/365))*((100+e3dc_config.ladeende2)/2-fLadeende)+fLadeende;
-    fLadeende2 = (cos((ts->tm_yday+9)*2*3.14/365))*(100-fLadeende2)+fLadeende2;
-    fLadeende3 = (cos((ts->tm_yday+9)*2*3.14/365))*(100-fLadeende3)+fLadeende3;
-    }
-    int cLadezeitende1 = (e3dc_config.winterminimum+(e3dc_config.sommermaximum-e3dc_config.winterminimum)/2)*3600;
-    int cLadezeitende2 = (e3dc_config.winterminimum+0.5+(e3dc_config.sommerladeende-e3dc_config.winterminimum-0.5)/2)*3600; // eine halbe Stunde Später
-    int cLadezeitende3 = (e3dc_config.winterminimum-(e3dc_config.sommermaximum-e3dc_config.winterminimum)/2)*3600; //Unload
+    float_t tJZK; // Jahreszeitkorrektur, Verkürzung der Regelzeit mit Abzug von Parameter float jzkorr (prozentual) vom Sommermaximum, integer in Sekunden 
+    tJZK =  ((1-jzkorr/100)*(0.5*cos((ts->tm_yday+10+182)*2*3.14/365)+0.5)+jzkorr/100) * (cRegelzeitende-cRegelzeitbeginn)/2;
+    //printf("JZK %0.1f%% ",jzkorr); // Prozent der Verkürzung der Regelzeit bezogen auf Sommermaximum
+    //printf("tJZK %0.1f% ",tJZK);
+    tRegelzeitende = (cRegelzeitende+cRegelzeitbeginn)/2 + int(tJZK); // Regelzeit-Ende früher, Korrektur auf Mittelwert addiert
+    tLadezeitende2 = (cLadezeitende+cRegelzeitbeginn)/2 + int(tJZK) + (cLadezeitende-cRegelzeitende)/2; // LadeZeit-Ende früher,  Korrektur auf Mittelwert addiert
+    tRegelzeitbeginn = (cRegelzeitende+cRegelzeitbeginn)/2 - int(tJZK); // Regelzeit-Beginn später,  Korrektur von Mittelwert subtrahiert
 
-    int32_t tZeitgleichung;
-    tLadezeitende1 = cLadezeitende1+cos((ts->tm_yday+9)*2*3.14/365)*-((e3dc_config.sommermaximum-e3dc_config.winterminimum)/2)*3600;
-    tLadezeitende2 = cLadezeitende2+cos((ts->tm_yday+9)*2*3.14/365)*-((e3dc_config.sommerladeende-e3dc_config.winterminimum-0.5)/2)*3600;
-    tLadezeitende3 = cLadezeitende3-cos((ts->tm_yday+9)*2*3.14/365)*-((e3dc_config.sommermaximum-e3dc_config.winterminimum)/2)*3600;
+	// ---- ENDE neuer Code ---- //
 
-//    float fht = e3dc_config.ht * cos((ts->tm_yday+9)*2*3.14/365);
+    //    float fht = e3dc_config.ht * cos((ts->tm_yday+9)*2*3.14/365);
     float fht = e3dc_config.htsockel + (e3dc_config.ht-e3dc_config.htsockel) * cos((ts->tm_yday+9)*2*3.14/365);
 
     // HT Endeladeleistung freigeben
@@ -622,12 +627,12 @@ int LoadDataProcess(SRscpFrameBuffer * frameBuffer) {
         switch (e3dc_config.AWtest) // Testfunktion
         {
             case 2:
-            if (fBatt_SOC > fht-1) break;  // do nothink
+            if (fBatt_SOC > fht-1) break;  // do nothing
             case 3: ret = 2; break;
             case 1: ret = 1;
         }
 
-        if  ((ret == 2)&&(e3dc_config.aWATTar==1))
+        if  (ret == 2)
         {
               iE3DC_Req_Load = e3dc_config.maximumLadeleistung*1.9;
 //            printf("Netzladen an");
@@ -661,7 +666,7 @@ if (                             // Das Entladen aus dem Speicher
     || (ret==1) // Rückgabewert aus CheckaWattar
    // Das Entladen wird zu den h mit den höchsten Börsenpreisen entladen
     ||
-        (fht<fBatt_SOC&& not e3dc_config.aWATTar)        // Wenn der SoC > der berechneten Reserve liegt
+        (fht<fBatt_SOC)        // Wenn der SoC > der berechneten Reserve liegt
     ||(iNotstrom==1)  //Notstrom
     ||(iNotstrom==4)  //Inselbetrieb
    ){
@@ -707,8 +712,7 @@ bDischarge = false;
         { if ((fPower_Grid < -100)&&(iPower_Bat==0))  // es wird eingespeist Entladesperre solange aufheben
                 {
                     iE3DC_Req_Load = fPower_Grid*-1;  // Es wird eingespeist
-//                    iLMStatus = -7;
-                    iLMStatus = 7;
+                    iLMStatus = -7;
                     printf("Batterie laden zulassen ");
 //                    return 0;
                 }   else
@@ -731,8 +735,7 @@ bDischarge = false;
     //                if (iE3DC_Req_Load < e3dc_config.maximumLadeleistung*-1)  //Auf maximumLadeleistung begrenzen
     //                iE3DC_Req_Load = e3dc_config.maximumLadeleistung*-1;  //Automatik anstossen
                  printf("Entladen starten ");
-//                iLMStatus = -7;
-                iLMStatus = 7;
+                 iLMStatus = -7;
 //                return 0;
         }
 
@@ -744,33 +747,32 @@ bDischarge = false;
     
     // HT Endeladeleistung freigeben  ENDE
     
+    // Berechnung Zeiträume Laden/Regelung
     
-    
-    // Berechnung freie Ladekapazität bis 90% bzw. Ladeende
-    
-    tZeitgleichung = (-0.171*sin(0.0337 * ts->tm_yday + 0.465) - 0.1299*sin(0.01787 * ts->tm_yday - 0.168))*3600;
-    tLadezeitende1 = tLadezeitende1 - tZeitgleichung;
-    tLadezeitende2 = tLadezeitende2 - tZeitgleichung;
-    tLadezeitende3 = tLadezeitende3 - tZeitgleichung;
-    tLadezeitende = tLadezeitende1;
-    printf("RB %2ld:%2ld %0.1f%% ",tLadezeitende3/3600,tLadezeitende3%3600/60,fLadeende3);
-    printf("RE %2ld:%2ld %0.1f%% ",tLadezeitende1/3600,tLadezeitende1%3600/60,fLadeende);
-    printf("LE %2ld:%2ld %0.1f%% ",tLadezeitende2/3600,tLadezeitende2%3600/60,fLadeende2);
+    tLadezeitende = tRegelzeitende;
+    printf("RZB %2ld:%2ld %0.1f%% ",tRegelzeitbeginn/3600,tRegelzeitbeginn%3600/60,fLadeende3); // Ausgabe RZB = RegelZeitBeginn
+    printf("RZE %2ld:%2ld %0.1f%% ",tRegelzeitende/3600,tRegelzeitende%3600/60,fLadeende);  // Ausgabe RZE = RegelZeitEnde
+    printf("LZE %2ld:%2ld %0.1f%% ",tLadezeitende2/3600,tLadezeitende2%3600/60,fLadeende2); // Ausgabe LZE = LadeZeitEnde
+    printf("JZK %0.1f%% ",jzkorr); // Ausgabe JZK = JahresZeitKorrektur, Prozentsatz vom Sommermaximum, siehe oben
+	// inkl. ÄNDERUNGEN FEB 2022
+
+// Berechnung freie Ladekapazität bis 90% bzw. Ladeende
+
     if (e3dc_config.aWATTar) printf("%.2f",fstrompreis);
     printf("\n");
 // Überwachungszeitraum für das Überschussladen übschritten und Speicher > Ladeende
 // Dann wird langsam bis Abends der Speicher bis 93% geladen und spätestens dann zum Vollladen freigegeben.
-    if (t < tLadezeitende3) {
-//            tLadezeitende = tLadezeitende3;
+    if (t < tRegelzeitbeginn) {
+//            tLadezeitende = tRegelzeitbeginn;
 // Vor Regelbeginn. Ist der SoC > fLadeende3 wird entladen
 // wenn die Abweichung vom SoC < 0.3% ist wird als Ziel der aktuelle SoC genommen
 // damit wird ein Wechsel von Laden/Endladen am Ende der Periode verhindert
         if ((fBatt_SOC-fLadeende3) > 0){
           if ((fBatt_SOC-fLadeende3) < 0.6)
                 fLadeende = fBatt_SOC; else
-// Es wird bis tLadezeitende3 auf fLadeende3 entladen
+// Es wird bis tRegelzeitbeginn auf fLadeende3 entladen
                 fLadeende = fLadeende3;
-            tLadezeitende = tLadezeitende3;}
+            tLadezeitende = tRegelzeitbeginn;}
                 }
  else
      if ((t >= tLadezeitende)&&(fBatt_SOC>=fLadeende)) {
@@ -782,6 +784,8 @@ bDischarge = false;
     if (t < tLadezeitende2)
     // Berechnen der linearen Ladeleistung bis tLadezeitende2 = Sommerladeende
     {iMinLade2 = ((fLadeende2 - fBatt_SOC)*e3dc_config.speichergroesse*10*3600)/(tLadezeitende2-t);
+	// Beispiel: fladeende = 100%, Batterie_SOC = 75%, Rest zu Laden = 25%, wenn Speicher = 6 kWh, Restladezeit (LZE2-t) in s = 3600 
+	// => iMin = 6(k)W*10*25 (wie 0,25*1000)= 1500W, 1/4 von 6000Wh = 1500Wh, wird für 1h geladen mit 1500W
     if (iMinLade2>e3dc_config.maximumLadeleistung)
         iMinLade2=e3dc_config.maximumLadeleistung;
     }
@@ -792,7 +796,7 @@ bDischarge = false;
     if (t < tLadezeitende)
     {
          if ((fBatt_SOC!=fBatt_SOC_alt)||(t-tLadezeit_alt>300)||(tLadezeitende!=tLadezeitende_alt)||(iFc == 0)||bCheckConfig)
-// Neuberechnung der Ladeleistung erfolgt, denn der SoC sich ändert oder
+// Neuberechnung der Ladeleistung erfolgt, wenn der SoC sich ändert oder
 // tLadezeitende sich ändert oder nach Ablauf von höchstens 5 Minuten
       {
         fBatt_SOC_alt=fBatt_SOC; // bei Änderung SOC neu berechnen
@@ -837,9 +841,10 @@ bDischarge = false;
                 printf("ML1 %i RQ %i ",iMinLade,iFc);
             else
                 printf("ML1 %i ML2 %i RQ %i ",iMinLade, iMinLade2,iFc);
-            printf("GMT %2ld:%2ld ZG %d ",tLadezeitende/3600,tLadezeitende%3600/60,tZeitgleichung);
+            printf("GMT %2ld:%2ld RZK/s %i ",tLadezeitende/3600,tLadezeitende%3600/60, int(tJZK));
+            // RZK/s ist die Regelzeitkorrektur in Sekunden, also die Verkürzung der Regelzeit (Sommer 21.06.), die durch Anwendung von jzkorr entsteht
         
-    printf("E3DC: %i:%i:%i\n",hh,mm,ss);
+    printf("E3DC: %s", asctime(ts));
 
     
     int iPower = 0;
@@ -897,7 +902,7 @@ bDischarge = false;
         {
             // Überprüfen ob vor RE der SoC > tLadeende2 ist, dann entladen was möglich
 
-            if ((t>tLadezeitende3)&&(t<tLadezeitende1)&&(fBatt_SOC>fLadeende2))
+            if ((t>tRegelzeitbeginn)&&(t<tRegelzeitende)&&(fBatt_SOC>fLadeende2))
                 iFc = e3dc_config.maximumLadeleistung*-1;
           
             if (iPower<iFc)
@@ -912,8 +917,8 @@ bDischarge = false;
               iPower = e3dc_config.maximumLadeleistung;
         
     if (e3dc_config.wallbox&&(bWBStart||bWBConnect)&&(bWBStopped||(iWBStatus>1))&&(e3dc_config.wbmode>1)
-        &&(((t<tLadezeitende1)&&(e3dc_config.ladeende>fBatt_SOC))||
-          ((t>tLadezeitende1)&&(e3dc_config.ladeende2>fBatt_SOC)))
+        &&(((t<tRegelzeitende)&&(e3dc_config.ladeende>fBatt_SOC))||
+          ((t>tRegelzeitende)&&(e3dc_config.ladeende2>fBatt_SOC)))
         &&
         ((tE3DC-tWBtime)<7200)&&((tE3DC-tWBtime)>10))
 // Wenn Wallbox vorhanden und das letzte Laden liegt nicht länger als 900sec zurück
@@ -943,12 +948,12 @@ bDischarge = false;
 // Steuerung direkt über vorgabe der Batterieladeleistung
 // -iPower_Bat + int32_t(fPower_Grid)
                 if (iLMStatus == 1) {
-// Es wird nur Morgens bis zum Winterminimum auf ladeende entladen;
+// Es wird nur Morgens bis zum regelzeitende auf ladeende entladen;
 // Danach wird nur bis auf ladeende2 entladen.
-                     if ((iPower < 0)&&((t>e3dc_config.winterminimum*3600)&&(fBatt_SOC<e3dc_config.ladeende2)))
+                     if ((iPower < 0)&&((t>e3dc_config.regelzeitende*3600)&&(fBatt_SOC<e3dc_config.ladeende2)))
                      iPower = 0;
 // Wenn der SoC > >e3dc_config.ladeende2 wird mit der Speicher max verfügbaren Leistung entladen
-//                    if ((iPower < 0)&&((t>tLadezeitende1)&&(fBatt_SOC>e3dc_config.ladeende2)))
+//                    if ((iPower < 0)&&((t>tRegelzeitende)&&(fBatt_SOC>e3dc_config.ladeende2)))
 //                 iPower = e3dc_config.maximumLadeleistung*-1;
                  iBattLoad = iPower;
                  tE3DC_alt = t;
@@ -1183,7 +1188,7 @@ int WBProcess(SRscpFrameBuffer * frameBuffer) {
  
  Unterstützung aWATTar
  
- Schaltet die Wallbox fpr die in cw gespeicherten Interval ein.
+ Schaltet die Wallbox fuer das in cw gespeicherten Interval ein.
  zu diesem zweck wird ein Ladeinterval zwischen Sonnenuntergang/-aufgang abgearbeitet
  bWBLademodus True = Sonne
  
@@ -1322,7 +1327,7 @@ int WBProcess(SRscpFrameBuffer * frameBuffer) {
                 if (fBatt_SOC < 15)
                     idynPower = idynPower*(fBatt_SOC - 5)/10;
 // Anhebung der Ladeleistung nur bis Ladezeitende1
-                if ((t<tLadezeitende1)&&(iPower<idynPower)&&(iRefload<e3dc_config.wbminlade))
+                if ((t<tRegelzeitende)&&(iPower<idynPower)&&(iRefload<e3dc_config.wbminlade))
                 {
                     if (iRefload<iMaxBattLade)
                      iPower = idynPower;
@@ -1375,26 +1380,8 @@ int WBProcess(SRscpFrameBuffer * frameBuffer) {
             struct tm * ptm;
             ptm = gmtime(&tE3DC);
 
-            if ((not(bWBZeitsteuerung))&&(bWBConnect)&&e3dc_config.aWATTar>0) // Zeitsteuerung nicht + aktiv + wenn Auto angesteckt
+            if ((not(bWBZeitsteuerung))&&(bWBConnect)) // Zeitsteuerung nicht + aktiv + wenn Auto angesteckt
             {
-// Überprüfen ob auf Sonne und Auto eingestellt ist,
-// falls das der Fall sein sollte, Protokoll ausgeben und Sonne/Auto einstellen
-                if ((not bWBLademodus||bWBmaxLadestrom)&&e3dc_config.aWATTar)
-                {
-                    sprintf(Log,"WB Error %s ", strtok(asctime(ptm),"\n"));
-                    WriteLog();
-
-                    bWBLademodus = true;
-                    WBchar6[0] = 1;            // Sonnenmodus
-                    WBchar6[1] = 31;       // fest auf Automatik einstellen
-                    bWBZeitsteuerung = false; // Ausschalten, weil z.B. abgesteckt
-                    if (bWBCharge)
-                    WBchar6[4] = 1; // Laden stoppen
-                    createRequestWBData(frameBuffer);  // Laden stoppen und/oeder Modi ändern
-                    WBchar6[4] = 0; // Toggle aus
-                    iWBStatus = 30;
-                    return(0);
-                }
                 for (int j = 0; j < ch.size(); j++ ) // suchen nach dem Zeitfenster
                     if ((ch[j].hh <= tE3DC)&&(ch[j].hh+3600 >= tE3DC)){
                         bWBZeitsteuerung = true;
@@ -1402,7 +1389,7 @@ int WBProcess(SRscpFrameBuffer * frameBuffer) {
                 if ((bWBZeitsteuerung)&&(bWBConnect)){  // Zeitfenster ist offen und Fahrzeug angesteckt
                     bWBmaxLadestromSave = bWBmaxLadestrom;
                     WBchar6[0] = 2;            // Netzmodus
-//                    if (not(bWBmaxLadestrom))
+                    if (not(bWBmaxLadestrom))
                     {
                         bWBmaxLadestrom = true;
                         WBchar6[1] = 32;
@@ -1421,19 +1408,19 @@ int WBProcess(SRscpFrameBuffer * frameBuffer) {
             {
                 bWBZeitsteuerung = false;
                 for (int j = 0; j < ch.size(); j++ )
-                    if ((ch[j].hh <= tE3DC)&&(ch[j].hh+3600 >= tE3DC)){
+                    if ((ch[j].hh% (24*3600)/3600)==hh){
                         bWBZeitsteuerung = true;
                     };
                 if ((not(bWBZeitsteuerung))||not bWBConnect){    // Ausschalten
-                    if ((bWBmaxLadestrom!=bWBmaxLadestromSave)||not (bWBLademodus))
+                    if ((bWBmaxLadestrom!=bWBmaxLadestromSave)||(bWBLademodus != bWBLademodusSave))
                     {bWBmaxLadestrom=bWBmaxLadestromSave;  //vorherigen Zustand wiederherstellen
-                    bWBLademodus = true;
+                    bWBLademodus = bWBLademodusSave;
 //                    if (bWBLademodus)         // Sonnenmodus fest einstellen
                     WBchar6[0] = 1;            // Sonnenmodus
 //                    if (not(bWBmaxLadestrom)){
                         WBchar6[1] = 31;       // fest auf Automatik einstellen
 //                    } else WBchar6[1] = 32;
-                    bWBZeitsteuerung = false; // Ausschalten, weil z.B. abgesteckt
+
                     if (bWBCharge)
                     WBchar6[4] = 1; // Laden stoppen
                     createRequestWBData(frameBuffer);  // Laden stoppen und/oeder Modi ändern
@@ -1553,8 +1540,6 @@ int WBProcess(SRscpFrameBuffer * frameBuffer) {
 //                createRequestWBData2(frameBuffer);
 
                 createRequestWBData(frameBuffer);
-                if (WBchar6[1]==6)
-                    iWBStatus = 30;
                 WBChar_alt = WBchar6[1];
 
             } else
@@ -1568,7 +1553,7 @@ int WBProcess(SRscpFrameBuffer * frameBuffer) {
                 || (fAvPower_Grid>400)          // Hohem Netzbezug
                                                 // Bei Speicher < 94%
 //                || ((fAvBatterie900 < -1000)&&(fAvBatterie < -2000))
-//                || (iAvalPower < (e3dc_config.maximumLadeleistung-fAvPower_Grid)*-1)
+                || (iAvalPower < (e3dc_config.maximumLadeleistung-fAvPower_Grid)*-1)
                 || (iAvalPower < iWBMinimumPower*-1)
                 ))  {
                 if ((WBchar6[1] > 5)&&bWBLademodus)
@@ -1583,7 +1568,7 @@ int WBProcess(SRscpFrameBuffer * frameBuffer) {
                     WBchar6[1]=5;
                     WBchar6[4] = 0;
                     WBChar_alt = WBchar6[1];
-                    iWBStatus = 10;  // Warten bis Neustart
+                    iWBStatus = 20;  // Warten bis Neustart
                 }}
     }
         }}
@@ -1606,7 +1591,7 @@ int createRequestExample(SRscpFrameBuffer * frameBuffer) {
     if(iAuthenticated == 0)
     
     {
-        printf("\nRequest authentication\n");
+        printf("\nStatus request authentication\n");
         // authentication request
         SRscpValue authenContainer;
         protocol.createContainerValue(&authenContainer, TAG_RSCP_REQ_AUTHENTICATION);
@@ -1619,7 +1604,7 @@ int createRequestExample(SRscpFrameBuffer * frameBuffer) {
     }
     else
     {
-//        printf("\nRequest cyclic example data\n");
+//        printf("\nRequest status values\n");
         // request power data information
         protocol.appendValue(&rootValue, TAG_EMS_REQ_POWER_PV);
         protocol.appendValue(&rootValue, TAG_EMS_REQ_POWER_ADD);
@@ -1835,7 +1820,7 @@ if (e3dc_config.wallbox)
     protocol.createFrameAsBuffer(frameBuffer, rootValue.data, rootValue.length, true); // true to calculate CRC on for transfer
     // the root value object should be destroyed after the data is copied into the frameBuffer and is not needed anymore
     protocol.destroyValueData(rootValue);
-    printf("\nRequest cyclic example data done %s %2ld:%2ld:%2ld",VERSION,tm_CONF_dt%(24*3600)/3600,tm_CONF_dt%3600/60,tm_CONF_dt%60);
+    printf("\nStatus value request version  %s %2ld:%2ld:%2ld",VERSION,tm_CONF_dt%(24*3600)/3600,tm_CONF_dt%3600/60,tm_CONF_dt%60);
 
     return 0;
 }
@@ -1864,7 +1849,7 @@ int handleResponseValue(RscpProtocol *protocol, SRscpValue *response)
         if(ucAccessLevel > 0) {
             iAuthenticated = 1;
         }
-        printf("RSCP authentitication level %i\n", ucAccessLevel);
+        printf("\nRSCP authentitication level %i\n", ucAccessLevel);
         break;
     }
     case TAG_EMS_POWER_PV: {    // response for TAG_EMS_REQ_POWER_PV
@@ -2853,7 +2838,7 @@ static int iEC = 0;
         iEC++; // Schleifenzähler erhöhen
         ptm = gmtime(&t);
 //      Berechne Sonnenaufgang-/untergang
-        SunriseCalc *location = new SunriseCalc(e3dc_config.hoehe, e3dc_config.laenge, 0);
+        SunriseCalc *location = new SunriseCalc(e3dc_config.breite, e3dc_config.laenge, 0);
         location->date(1900+ptm->tm_year, ptm->tm_mon+1,ptm->tm_mday,  0);
         sunriseAt = location->sunrise();
         sunsetAt = location->sunset();
@@ -2865,8 +2850,7 @@ static int iEC = 0;
         WriteLog();
         // connect to server
         printf("Program Start Version:%s\n",VERSION);
-        printf("Sonnenaufgang %i:%i %i:%i\n", hh, mm, hh1, mm1);
-        if (e3dc_config.aWATTar) aWATTar(ch);
+        printf("Sonnenauf/untergang %i:%i %i:%i\n", hh, mm, hh1, mm1);
         printf("Connecting to server %s:%i\n", e3dc_config.server_ip, e3dc_config.server_port);
         iSocket = SocketConnect(e3dc_config.server_ip, e3dc_config.server_port);
         if(iSocket < 0) {
