@@ -170,7 +170,7 @@ int ControlLoadData2(SRscpFrameBuffer * frameBuffer,int32_t iPower) {
     SRscpValue PMContainer;
     protocol.createContainerValue(&PMContainer, TAG_EMS_REQ_SET_POWER_SETTINGS);
     protocol.appendValue(&PMContainer, TAG_EMS_POWER_LIMITS_USED,true);
-   protocol.appendValue(&PMContainer, TAG_EMS_MAX_CHARGE_POWER,uPower);
+    protocol.appendValue(&PMContainer, TAG_EMS_MAX_CHARGE_POWER,uPower);
 //    protocol.appendValue(&PMContainer, TAG_EMS_MAX_DISCHARGE_POWER,300);
 //    protocol.appendValue(&PMContainer, TAG_EMS_DISCHARGE_START_POWER,70);
     // append sub-container to root container
@@ -393,6 +393,7 @@ bool GetConfig()
         e3dc_config.breite = 50; 	// Standort E3DC in e3dc_config eintragen!
         e3dc_config.laenge = 10;    // Standort E3DC in e3dc_config eintragen!
         e3dc_config.aWATTar = false;
+        e3dc_config.regelungaktiv = true;  // opt. Deaktivieren von E3DC-Control mittels App-Schalter POWERSAVE_ENABLED
         e3dc_config.Avhourly = 10;   // geschätzter stündlicher Verbrauch in %
         e3dc_config.AWDiff = 100;   // Differenzsockel in €/MWh
         e3dc_config.AWAufschlag = 1.2;
@@ -586,7 +587,7 @@ int LoadDataProcess(SRscpFrameBuffer * frameBuffer) {
 #
     
     
-    // --- ÄNDERUNGEN FEB. 2020 ----//
+    // --- ÄNDERUNGEN FEB. 2022 ----//
     
     float fLadeende = e3dc_config.ladeende;   //float Vorgabe Batteriestand in % zum Ladeende z.B. 96 = 96%
     float fLadeende2 = e3dc_config.ladeende2;
@@ -693,7 +694,7 @@ if (                             // Das Entladen aus dem Speicher
         
 bDischarge = false;
 
-/*            // Endladen ausschalten
+/*            // Entladen ausschalten
         if (iDischarge >1)
             // Ausschalten nur wenn nicht im Notstrom/Inselbetrieb
             { Control_MAX_DISCHARGE(frameBuffer,0);
@@ -806,8 +807,8 @@ bDischarge = false;
 
 // Berechnen der Ladeleistung bis zum nächstliegenden Zeitpunkt
                 
-        iFc = (fLadeende - fBatt_SOC)*e3dc_config.speichergroesse*10*3600;
-          if ((tLadezeitende-t) > 300)
+        iFc = (fLadeende - fBatt_SOC)*e3dc_config.speichergroesse*10*3600; // OS: iFc Restladung in Ws (Wattsekunden)
+          if ((tLadezeitende-t) > 300)		// wenn mehr als 5 min bis zum Ladezeitende
               iFc = iFc / (tLadezeitende-t); else
           iFc = iFc / (300);
           if (iFc > e3dc_config.maximumLadeleistung)
@@ -822,7 +823,8 @@ bDischarge = false;
                iFc = (iFc+e3dc_config.untererLadekorridor);
             else
               iFc = 0;
-          iFc = iFc*(float(e3dc_config.maximumLadeleistung)/(e3dc_config.obererLadekorridor-e3dc_config.untererLadekorridor));
+          //iFc = iFc*(float(e3dc_config.maximumLadeleistung)/(e3dc_config.obererLadekorridor-e3dc_config.untererLadekorridor)); //  OS: Faktor weglassen für gleichbleibende Ladeleistung!
+          // Berechnung Faktor: maximumLadeleistung / Breite Ladeorridor
           if (iFc > e3dc_config.maximumLadeleistung) iFc = e3dc_config.maximumLadeleistung;
           if (abs(iFc) > e3dc_config.maximumLadeleistung) iFc = e3dc_config.maximumLadeleistung*-1;
           if (abs(iFc) < e3dc_config.minimumLadeleistung) iFc = 0;
@@ -842,7 +844,7 @@ bDischarge = false;
             else
                 printf("ML1 %i ML2 %i RQ %i ",iMinLade, iMinLade2,iFc);
             printf("GMT %2ld:%2ld RZK/s %i ",tLadezeitende/3600,tLadezeitende%3600/60, int((cRegelzeitende-cRegelzeitbeginn)/2-tJZK));
-            // RZK/s ist die Regelzeitkorrektur in Sekunden, also die Verkürzung der Regelzeit (Sommer 21.06.), die durch Anwendung von jzkorr entsteht
+            // OS: RZK/s ist die Regelzeitkorrektur in Sekunden, also die Verkürzung der Regelzeit (Sommer 21.06.), die durch Anwendung von jzkorr entsteht
         
     printf("E3DC: %s", asctime(ts));
 
@@ -1613,11 +1615,12 @@ int createRequestExample(SRscpFrameBuffer * frameBuffer) {
         protocol.appendValue(&rootValue, TAG_EMS_REQ_POWER_HOME);
         protocol.appendValue(&rootValue, TAG_EMS_REQ_POWER_GRID);
         protocol.appendValue(&rootValue, TAG_EMS_REQ_EMERGENCY_POWER_STATUS);
+        protocol.appendValue(&rootValue, TAG_EMS_REQ_GET_POWER_SETTINGS);  // OS: zur Darstellung Status Regelung
 //        protocol.appendValue(&rootValue, TAG_EMS_REQ_REMAINING_BAT_CHARGE_POWER);
+        
         if(iBattPowerStatus == 0)
-        {
-            protocol.appendValue(&rootValue, TAG_EMS_REQ_GET_POWER_SETTINGS);
-            iBattPowerStatus = 1;
+        {   
+         iBattPowerStatus = 1;  // OS: unabhängig von Anfrage POWER_SETTINGS
         }
 // request Power Meter information
         if (iLMStatus < 0)
@@ -1642,7 +1645,7 @@ int createRequestExample(SRscpFrameBuffer * frameBuffer) {
         //    Power = Power*-1;
         protocol.createContainerValue(&PMContainer, TAG_EMS_REQ_SET_POWER);
         protocol.appendValue(&PMContainer, TAG_EMS_REQ_SET_POWER_MODE,Mode);
-//        if (Mode > 0)
+//        if (Mode > 0) // hier Regelung zu deaktivieren??
             protocol.appendValue(&PMContainer, TAG_EMS_REQ_SET_POWER_VALUE,iE3DC_Req_Load);
         // append sub-container to root container
         protocol.appendValue(&rootValue, PMContainer);
@@ -1841,7 +1844,7 @@ int handleResponseValue(RscpProtocol *protocol, SRscpValue *response)
 
     // check the SRscpValue TAG to detect which response it is
     switch(response->tag){
-    case TAG_RSCP_AUTHENTICATION: {
+		case TAG_RSCP_AUTHENTICATION: {
         // It is possible to check the response->dataType value to detect correct data type
         // and call the correct function. If data type is known,
         // the correct function can be called directly like in this case.
@@ -1852,24 +1855,24 @@ int handleResponseValue(RscpProtocol *protocol, SRscpValue *response)
         printf("\nRSCP authentitication level %i\n", ucAccessLevel);
         break;
     }
-    case TAG_EMS_POWER_PV: {    // response for TAG_EMS_REQ_POWER_PV
+		case TAG_EMS_POWER_PV: {    // response for TAG_EMS_REQ_POWER_PV
         int32_t iPower = protocol->getValueAsInt32(response);
         printf("\nEMS PV %i", iPower);
         iPower_PV = iPower;
         iPower_PV_E3DC = iPower;
         break;
     }
-    case TAG_EMS_POWER_BAT: {    // response for TAG_EMS_REQ_POWER_BAT
+		case TAG_EMS_POWER_BAT: {    // response for TAG_EMS_REQ_POWER_BAT
         iPower_Bat = protocol->getValueAsInt32(response);
         printf(" BAT %i", iPower_Bat);
         break;
     }
-    case TAG_EMS_BAT_SOC: {              // response for TAG_BAT_REQ_RSOC
+		case TAG_EMS_BAT_SOC: {              // response for TAG_BAT_REQ_RSOC
         fBatt_SOC = protocol->getValueAsUChar8(response);
 //        printf("Battery SOC %0.1f %% ", fBatt_SOC);
         break;
     }
-    case TAG_EMS_POWER_HOME: {    // response for TAG_EMS_REQ_POWER_HOME
+		case TAG_EMS_POWER_HOME: {    // response for TAG_EMS_REQ_POWER_HOME
         int32_t iPower2 = protocol->getValueAsInt32(response);
         printf(" home %i", iPower2);
         iPowerBalance = iPower2;
@@ -1877,7 +1880,7 @@ int handleResponseValue(RscpProtocol *protocol, SRscpValue *response)
 
         break;
     }
-    case TAG_EMS_POWER_GRID: {    // response for TAG_EMS_REQ_POWER_GRID
+		case TAG_EMS_POWER_GRID: {    // response for TAG_EMS_REQ_POWER_GRID
         int32_t iPower = protocol->getValueAsInt32(response);
         iPowerBalance = iPowerBalance- iPower_PV + iPower_Bat - iPower;
         printf(" grid %i", iPower);
@@ -1885,7 +1888,7 @@ int handleResponseValue(RscpProtocol *protocol, SRscpValue *response)
         printf(" # %i\n", iPower_PV - iPower_Bat + iPower - int(fPower_WB));
         break;
     }
-    case TAG_EMS_POWER_ADD: {    // response for TAG_EMS_REQ_POWER_ADD
+		case TAG_EMS_POWER_ADD: {    // response for TAG_EMS_REQ_POWER_ADD
         int32_t iPower = protocol->getValueAsInt32(response);
 
         printf(" add %i", - iPower);
@@ -1912,12 +1915,14 @@ int handleResponseValue(RscpProtocol *protocol, SRscpValue *response)
             iNotstrom = iPower;
             break;
         }
-    case TAG_PM_POWER_L1: {    // response for TAG_EMS_REQ_POWER_ADD
+		case TAG_PM_POWER_L1: {    // response for TAG_EMS_REQ_POWER_ADD
             int32_t iPower = protocol->getValueAsInt32(response);
             printf("L1 is %i W\n", iPower);
             break;
     }
-   case TAG_BAT_DATA: {        // resposne for TAG_BAT_REQ_DATA
+   
+   
+		case TAG_BAT_DATA: {        // response for TAG_BAT_REQ_DATA
         uint8_t ucBatteryIndex = 0;
         std::vector<SRscpValue> batteryData = protocol->getValueAsContainer(response);
         for(size_t i = 0; i < batteryData.size(); ++i) {
@@ -1936,7 +1941,7 @@ int handleResponseValue(RscpProtocol *protocol, SRscpValue *response)
             case TAG_BAT_RSOC: {              // response for TAG_BAT_REQ_RSOC
                 if (abs(fBatt_SOC - protocol->getValueAsFloat32(&batteryData[i]))<1)
                 fBatt_SOC = protocol->getValueAsFloat32(&batteryData[i]);
-                printf("Battery SOC %0.02f%% ", fBatt_SOC);
+                printf("\nBattery SOC %0.02f%% ", fBatt_SOC);
                 break;
             }
             case TAG_BAT_MODULE_VOLTAGE: {    // response for TAG_BAT_REQ_MODULE_VOLTAGE
@@ -1969,7 +1974,7 @@ int handleResponseValue(RscpProtocol *protocol, SRscpValue *response)
         protocol->destroyValueData(batteryData);
         break;
     }
-        case TAG_PM_DATA: {        // resposne for TAG_PM_REQ_DATA
+		case TAG_PM_DATA: {        // response for TAG_PM_REQ_DATA
             uint8_t ucPMIndex = 0;
             float fPower1 = 0;
             float fPower2 = 0;
@@ -2064,7 +2069,7 @@ int handleResponseValue(RscpProtocol *protocol, SRscpValue *response)
             protocol->destroyValueData(PMData);
             break;
         }
-        case TAG_PVI_DATA: {        // resposne for TAG_PVI_REQ_DATA
+		case TAG_PVI_DATA: {        // response for TAG_PVI_REQ_DATA
             uint8_t ucPVIIndex = 0;
             float fGesPower = 0;
             std::vector<SRscpValue> PVIData = protocol->getValueAsContainer(response);
@@ -2250,7 +2255,7 @@ int handleResponseValue(RscpProtocol *protocol, SRscpValue *response)
 
 //        case TAG_WB_AVAILABLE_SOLAR_POWER:              // response for TAG_WB_AVAILABLE_SOLAR_POWER
 
-        case TAG_WB_DATA: {        // resposne for TAG_WB_DATA
+        case TAG_WB_DATA: {        // response for TAG_WB_DATA
             uint8_t ucPMIndex = 0;
             std::vector<SRscpValue> PMData = protocol->getValueAsContainer(response);
             for(size_t i = 0; i < PMData.size(); ++i) {
@@ -2506,11 +2511,11 @@ int handleResponseValue(RscpProtocol *protocol, SRscpValue *response)
 */                    break;
                 }
             }
-            protocol->destroyValueData(PMData);
+            protocol->destroyValueData(PMData); 
             break;
         }
-        case TAG_EMS_GET_POWER_SETTINGS:         // resposne for TAG_PM_REQ_DATA
-        case TAG_EMS_SET_POWER_SETTINGS: {        // resposne for TAG_PM_REQ_DATA
+        case TAG_EMS_GET_POWER_SETTINGS:         // response for TAG_PM_REQ_DATA
+        case TAG_EMS_SET_POWER_SETTINGS: {        // response for TAG_PM_REQ_DATA
             uint8_t ucPMIndex = 0;
             std::vector<SRscpValue> PMData = protocol->getValueAsContainer(response);
             for(size_t i = 0; i < PMData.size(); ++i) {
@@ -2528,7 +2533,7 @@ int handleResponseValue(RscpProtocol *protocol, SRscpValue *response)
                     }
                     case TAG_EMS_POWER_LIMITS_USED: {              // response for POWER_LIMITS_USED
                         if (protocol->getValueAsBool(&PMData[i])){
-                            printf("POWER_LIMITS_USED\n");
+                            printf("PLU ");
                             }
                         break;
                     }
@@ -2538,41 +2543,43 @@ int handleResponseValue(RscpProtocol *protocol, SRscpValue *response)
                             {if (uPower < 1500)
                                   e3dc_config.maximumLadeleistung = 1500; else
                                    e3dc_config.maximumLadeleistung = uPower;
-                            printf("MAX_CHARGE_POWER %i W\n", uPower);}
+                            printf("MCP %i W ", uPower);}
                         break;
                     }
                     case TAG_EMS_MAX_DISCHARGE_POWER: {              //102 response for TAG_EMS_MAX_DISCHARGE_POWER
                         uint32_t uPower = protocol->getValueAsUInt32(&PMData[i]);
-                        printf("MAX_DISCHARGE_POWER %i W\n", uPower);
+                        printf("MDP %i W ", uPower);
                         iDischarge = uPower;
                         break;
                     }
                     case TAG_EMS_DISCHARGE_START_POWER:{              //103 response for TAG_EMS_DISCHARGE_START_POWER
                         uint32_t uPower = protocol->getValueAsUInt32(&PMData[i]);
-                        printf("DISCHARGE_START_POWER %i W\n", uPower);
+                        printf("DSP %i W ", uPower);
                         break;
                     }
                     case TAG_EMS_POWERSAVE_ENABLED: {              //104 response for TAG_EMS_POWERSAVE_ENABLED
-                        if (protocol->getValueAsBool(&PMData[i])){
-                            printf("POWERSAVE_ENABLED\n");
-                        }
+                         e3dc_config.regelungaktiv = protocol->getValueAsBool(&PMData[i]);
+                         if(e3dc_config.regelungaktiv)
+                            printf("PSE Regelung aktiv"); 
+                            else
+                            printf("Regelung deaktiviert ");
                         break;
                     }
                     case TAG_EMS_WEATHER_REGULATED_CHARGE_ENABLED: {//105 resp WEATHER_REGULATED_CHARGE_ENABLED
                         if (protocol->getValueAsBool(&PMData[i])){
-                            printf("WEATHER_REGULATED_CHARGE_ENABLED\n");
+                            printf("WRC ");
                         }
                         break;
                     }
                         // ...
                     default:
                         // default behaviour
-/*                        printf("Unkonwn GET_POWER_SETTINGS tag %08X", PMData[i].tag);
-                        printf(" len %08X", PMData[i].length);
-                        printf(" datatype %08X\n", PMData[i].dataType);
-                        uint32_t uPower = protocol->getValueAsUInt32(&PMData[i]);
-                        printf(" Value  %i\n", uPower);
-*/                        break;
+                        // printf("Unkonwn GET_POWER_SETTINGS tag %08X", PMData[i].tag);
+                        // printf(" len %08X", PMData[i].length);
+                        // printf(" datatype %08X\n", PMData[i].dataType);
+                        // uint32_t uPower = protocol->getValueAsUInt32(&PMData[i]);
+                        // printf(" Value  %i\n", uPower);
+                       break;
                 }
             }
             protocol->destroyValueData(PMData);

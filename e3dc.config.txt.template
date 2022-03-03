@@ -7,9 +7,12 @@ e3dc_password = xxxxxxxxx
 aes_password = xxxxxxxxx
 
 breite = 52.516
-# Breitengrad dezimal E3DC-Standort: 52.516°
+# Breitengrad dezimal E3DC-Standort: 52.516 Grad N (nördl. Breite)
 laenge = 10.145
-# Längengrand dezimal E3DC-Standort: 10.145°
+# Längengrand dezimal E3DC-Standort: 10.145 Grad E (östl. Länge)
+
+# debug = true
+# logfile = /mnt/ramdisk/logfile_e3dc
 
 wallbox = false         
 ext1 = false				
@@ -22,14 +25,14 @@ minimumLadeleistung = 300
 maximumLadeleistung = 3000  
 wrleistung = 12000     
 ladeschwelle = 30  
-ladeende = 97
-ladeende2 = 99
+ladeende = 99
+ladeende2 = 100
 jahreszeitkorrektur = 50
-regelzeitbeginn = 9.0
+regelzeitbeginn = 8.8
 regelzeitende = 14.0
 sommerladeende = 14.2
-speichergroesse = 12.0
-unload = 100
+speichergroesse = 12.8
+unload = 50
 #htmin = 10
 #htsockel = 10
 #hton = 5                  
