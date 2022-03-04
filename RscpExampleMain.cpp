@@ -809,7 +809,7 @@ bDischarge = false;
                 
         iFc = (fLadeende - fBatt_SOC)*e3dc_config.speichergroesse*10*3600; // OS: iFc Restladung in Ws (Wattsekunden)
           if ((tLadezeitende-t) > 300)		// wenn mehr als 5 min bis zum Ladezeitende
-              iFc = iFc / (tLadezeitende-t); else
+              iFc = iFc / (tLadezeitende-t); else  // Restladeleistung in Watt  bis Ladezeitende
           iFc = iFc / (300);
           if (iFc > e3dc_config.maximumLadeleistung)
               iMinLade = e3dc_config.maximumLadeleistung;
@@ -1643,14 +1643,17 @@ int createRequestExample(SRscpFrameBuffer * frameBuffer) {
                 iE3DC_Req_Load = e3dc_config.maximumLadeleistung;
                 SRscpValue PMContainer;
         //    Power = Power*-1;
-        protocol.createContainerValue(&PMContainer, TAG_EMS_REQ_SET_POWER);
-        protocol.appendValue(&PMContainer, TAG_EMS_REQ_SET_POWER_MODE,Mode);
-//        if (Mode > 0) // hier Regelung zu deaktivieren??
+
+			if (e3dc_config.regelungaktiv) // hier Regelung zu deaktivieren!
+			{
+			protocol.createContainerValue(&PMContainer, TAG_EMS_REQ_SET_POWER);
+			protocol.appendValue(&PMContainer, TAG_EMS_REQ_SET_POWER_MODE,Mode); 
             protocol.appendValue(&PMContainer, TAG_EMS_REQ_SET_POWER_VALUE,iE3DC_Req_Load);
-        // append sub-container to root container
-        protocol.appendValue(&rootValue, PMContainer);
-        // free memory of sub-container as it is now copied to rootValue
-        protocol.destroyValueData(PMContainer);
+			// append sub-container to root container
+			protocol.appendValue(&rootValue, PMContainer);
+			// free memory of sub-container as it is now copied to rootValue
+			protocol.destroyValueData(PMContainer);
+			}
         }
 
         // request battery information
