@@ -111,12 +111,14 @@ wrleistung = 12000
 ladeschwelle = 15           
 // Unter 15% SoC wird immer geladen 
 ladeende = 85               
-// Ziel SoC 85% zwischen
-winterminimum = 11		   
+// Ziel SoC 85%
+jahreszeitkorrektur = 50
+// default = 50%, d.h. Regelzeit im Winter (21.12.) ist 50% der Regelzeit Sommer (21.06.), 100%, wenn keine Korrektur der Regelzeit gewünscht
+regelzeitbeginn = 11		   
 // winterminimum wintersonnenwende
-sommermaximum = 14           
+regelzeitende = 14           
 // sommermaximum sommersonnenwende
-sommerladeende = 18.5     
+sommerladeende = 14.2    
 // im Sommer wird das Laden auf 100% verzögert
 // Im Winterhalbjahr wird versucht den Speicher zum Hochtarif zu nutzen
 htmin = 30                
@@ -133,7 +135,7 @@ htsun = true
 // Hochtourig Sonntag
 debug = false
 logfile = logfile
-// zusätzliche debug informationenin eine logfile ausgeben
+// zusätzliche debug informationen in einem logfile ausgeben
 // Alle Steuerungsanweisungen an E3DC
 
 // anpassen und als 

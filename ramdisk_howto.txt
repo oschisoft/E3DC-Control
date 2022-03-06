@@ -1,0 +1,21 @@
+Creating a RAMDISK on Ubuntu 18.04 LTS is really easy. All required tools  are already pre-installed on Ubuntu 18.04 LTS.
+
+First create a mount point where you will be mounting the RAMDISK with the following command:
+
+sudo mkdir /mnt/ramdisk
+
+Now you can mount the RAMDISK to the /mnt/ramdisk mount point with the following command:
+
+$ sudo mount -t tmpfs -o rw,size=2G tmpfs /mnt/ramdisk
+
+NOTE: Here, size=2G means, the RAMDISK will be 2 GB in size. To create RAMDISK of several MB, use M. For example, to create 512 MB RAMDISK, put size=512M
+
+$ sudo mount -t tmpfs -o rw,size=512M tmpfs /mnt/ramdisk
+
+Now to verify whether the RAMDISK is created, run the following command:
+
+$ df -h
+
+As you can see, the RAMDISK is created and mounted on /mnt/ramdisk as expected:
+tmpfs                      199M     28K  199M    1% /run/user/1000
+tmpfs                      512M       0  512M    0% /mnt/ramdisk
