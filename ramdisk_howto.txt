@@ -19,3 +19,11 @@ $ df -h
 As you can see, the RAMDISK is created and mounted on /mnt/ramdisk as expected:
 tmpfs                      199M     28K  199M    1% /run/user/1000
 tmpfs                      512M       0  512M    0% /mnt/ramdisk
+
+
+Command-Ausgabe auf ramdisk in datei schreiben:
+
+command | tee -a file.txt
+
+z.B. 
+/home/pi/E3DC.sh | tee -a /mnt/ramdisk/E3DC-Console.txt
