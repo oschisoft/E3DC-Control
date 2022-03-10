@@ -2,10 +2,10 @@
 //  E3DC_CONF.h
 //  RscpExcample
 //
-//  originally Created by Eberhard Mayer on 16.08.18. / OS 03.03.2022
+//  originally Created by Eberhard Mayer on 16.08.18. / OS 09.03.2022
 //  Copyright © 2018 Eberhard Mayer. All rights reserved.
 //
-#define VERSION "2022.03.03.0" //Delta
+#define VERSION "2022.03.09.0" //Delta
 #ifndef E3DC_CONF_h
 #define E3DC_CONF_h
 

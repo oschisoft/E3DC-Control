@@ -1,4 +1,4 @@
-// ---- Hauptprogramm E3DC-Laderegelung, Version 2022.03.03 ---- //
+// ---- Hauptprogramm E3DC-Laderegelung, Version 2022.03.09 ---- //
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,6 +51,7 @@ static float fPower_Grid;
 static float fAvPower_Grid,fAvPower_Grid3600,fAvPower_Grid600,fAvPower_Grid60; // Durchschnitt ungewichtete Netzleistung der letzten 10sec
 static int iAvPower_GridCount = 0;
 static float fPower_WB;
+static float fParabelX, fParabelY, fRestEnergie;  // X/Y-Werte und "Fläche" für Regelung Ladeleistung in Parabelform
 static int32_t iPower_PV, iPower_PV_E3DC;
 static int32_t iPower_Bat;
 static uint8_t iPhases_WB;
@@ -64,6 +65,7 @@ static int hh,mm,ss;
 static int32_t iFc, iMinLade,iMinLade2; // Mindestladeladeleistung des E3DC Speichers
 static float_t fL1V=230,fL2V=230,fL3V=230;
 static int iDischarge = -1;
+static bool bParabel = false; // Auswahl Laden mit Parabelkurve, false = Laden linear/dynamisch
 static bool bDischarge = false, bDischargeDone;  // Wenn false, wird das Entladen blockiert, unabhängig von dem vom Portal gesetzen wert
 char cWBALG;
 static bool bWBLademodus; // Lademodus der Wallbox; z.B. Sonnenmodus
@@ -806,7 +808,7 @@ bDischarge = false;
           tLadezeit_alt=t; // alle 300sec Berechnen
 
 // Berechnen der Ladeleistung bis zum nächstliegenden Zeitpunkt
-                
+                       
         iFc = (fLadeende - fBatt_SOC)*e3dc_config.speichergroesse*10*3600; // OS: iFc Restladung in Ws (Wattsekunden)
           if ((tLadezeitende-t) > 300)		// wenn mehr als 5 min bis zum Ladezeitende
               iFc = iFc / (tLadezeitende-t); else  // Restladeleistung in Watt  bis Ladezeitende
@@ -823,8 +825,35 @@ bDischarge = false;
                iFc = (iFc+e3dc_config.untererLadekorridor);
             else
               iFc = 0;
+          
+          
+          // Beginn Bestimmung Regelleistung in Parabelform
+				if ((t > tRegelzeitbeginn)&&(t < tLadezeitende)&&(bParabel)){
+				fRestEnergie = (fLadeende - fBatt_SOC)*e3dc_config.speichergroesse*10*3600; // OS: offene Restladung in Ws (Wattsekunden)
+				// printf("   RE %0.1f Ws ", fRestEnergie);
+				// printf("RZB %i s ", tRegelzeitbeginn);
+				// printf("LZE %i s ", tLadezeitende);
+				// printf("t= %i s ", t);
+				fParabelX = tLadezeitende - t; // 1 - (tLadezeitende-t)/(tLadezeitende-tRegelzeitbeginn);
+				fParabelY = tLadezeitende - tRegelzeitbeginn; 
+				fParabelX = 1 - (fParabelX / fParabelY); 
+				fParabelY = -4*fParabelX*fParabelX + 4*fParabelX;  // OS: Parabel-Funktionswert mit X-Wert normiert zw. 0 und 1
+				printf("X= %0.1f Y= %0.1f ", fParabelX, fParabelY);
+				// fRestEnergie = fRestEnergie* (1-fParabelX)/(2/3 + 4/3*fParabelX*fParabelX*fParabelX - 2*fParabelX*fParabelX); // Integral weglassen!
+				iFc = (fRestEnergie * (1/3 + fParabelY)) / (tLadezeitende-t); 
+				printf("ReqL %i W ", iE3DC_Req_Load);
+				if (iFc < e3dc_config.untererLadekorridor) iFc = e3dc_config.untererLadekorridor; // Sockel für Mindestladeleistung
+				if (iFc > e3dc_config.obererLadekorridor) iFc = e3dc_config.obererLadekorridor;  // zur Sicherheit
+				printf("iFC %i W \n", int(iFc));
+				sprintf(Log,"pCTL %s SOC=%0.02f X=%0.1f Y=%0.1f ReqL=%i iPwrB=%i iFc=%i grid=%0.02f",strtok(asctime(ts),"\n"),fBatt_SOC, fParabelX, fParabelY, iE3DC_Req_Load, iPower_Bat, iFc, fPower_Grid);
+                WriteLog();
+				iMinLade = iFc;
+				}   // Ende Bestimmung Regelleistung in Parabelform
+          
           //iFc = iFc*(float(e3dc_config.maximumLadeleistung)/(e3dc_config.obererLadekorridor-e3dc_config.untererLadekorridor)); //  OS: Faktor weglassen für gleichbleibende Ladeleistung!
           // Berechnung Faktor: maximumLadeleistung / Breite Ladeorridor
+
+				
           if (iFc > e3dc_config.maximumLadeleistung) iFc = e3dc_config.maximumLadeleistung;
           if (abs(iFc) > e3dc_config.maximumLadeleistung) iFc = e3dc_config.maximumLadeleistung*-1;
           if (abs(iFc) < e3dc_config.minimumLadeleistung) iFc = 0;
@@ -993,9 +1022,10 @@ bDischarge = false;
 // war, bleibt der Freilauf erhalten
 
                                 {   iLMStatus = 3;
-                                    if (iLastReq>0)
-                                    {sprintf(Log,"CTL %s %0.02f %i %i %0.02f",strtok(asctime(ts),"\n"),fBatt_SOC, iE3DC_Req_Load, iPower_Bat, fPower_Grid);
-                                        WriteLog();
+                                    if (iLastReq>0){
+                                    //sprintf(Log,"CTL %s %0.02f %i %i %0.02f",strtok(asctime(ts),"\n"),fBatt_SOC, iE3DC_Req_Load, iPower_Bat, fPower_Grid);
+                                    sprintf(Log,"3CTL %s SOC=%0.02f X=%0.1f Y=%0.1f ReqL=%i iPwrB=%i iFc=%i grid=%0.02f",strtok(asctime(ts),"\n"),fBatt_SOC, fParabelX, fParabelY, iE3DC_Req_Load, iPower_Bat, iFc, fPower_Grid);
+									WriteLog();
                                         iLastReq--;}
                                         }
                                 else
@@ -1007,8 +1037,8 @@ bDischarge = false;
                                     }else
                                 iLMStatus = -6;
                                 iLastReq = 6;
-                                sprintf(Log,"CTL %s %0.02f %i %i %0.02f",strtok(asctime(ts),"\n"),fBatt_SOC, iE3DC_Req_Load, iPower_Bat, fPower_Grid);
-                                WriteLog();}
+                                sprintf(Log,"6CTL %s SOC=%0.02f X=%0.1f Y=%0.1f ReqL=%i iPwrB=%i iFc=%i grid=%0.02f",strtok(asctime(ts),"\n"),fBatt_SOC, fParabelX, fParabelY, iE3DC_Req_Load, iPower_Bat, iFc, fPower_Grid);
+								WriteLog();}
                             } else
                             iLMStatus = 11;
                             }
@@ -2542,11 +2572,10 @@ int handleResponseValue(RscpProtocol *protocol, SRscpValue *response)
                     }
                     case TAG_EMS_MAX_CHARGE_POWER: {              // 101 response for TAG_EMS_MAX_CHARGE_POWER
                         uint32_t uPower = protocol->getValueAsUInt32(&PMData[i]);
-                        if (uPower < e3dc_config.maximumLadeleistung)
-                            {if (uPower < 1500)
-                                  e3dc_config.maximumLadeleistung = 1500; else
-                                   e3dc_config.maximumLadeleistung = uPower;
-                            printf("MCP %i W ", uPower);}
+                        //if (uPower < e3dc_config.maximumLadeleistung)
+                        if (uPower < 1500) e3dc_config.maximumLadeleistung = 1500; 
+                        else e3dc_config.maximumLadeleistung = uPower;
+                        printf("MCP %i W ", uPower);
                         break;
                     }
                     case TAG_EMS_MAX_DISCHARGE_POWER: {              //102 response for TAG_EMS_MAX_DISCHARGE_POWER
@@ -2562,8 +2591,11 @@ int handleResponseValue(RscpProtocol *protocol, SRscpValue *response)
                     }
                     case TAG_EMS_POWERSAVE_ENABLED: {              //104 response for TAG_EMS_POWERSAVE_ENABLED
                          e3dc_config.regelungaktiv = protocol->getValueAsBool(&PMData[i]);
-                         if(e3dc_config.regelungaktiv)
+                         if(e3dc_config.regelungaktiv){
                             printf("PSE Regelung aktiv"); 
+                            if (iLMStatus < 6) printf(" Standby %i", iLMStatus);
+                            if (iLMStatus == 6) printf(" ReqL setzen %i W ", iE3DC_Req_Load);
+						}
                             else
                             printf("Regelung deaktiviert ");
                         break;
