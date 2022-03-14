@@ -2,10 +2,10 @@
 //  E3DC_CONF.h
 //  RscpExcample
 //
-//  originally Created by Eberhard Mayer on 16.08.18. / OS 09.03.2022
+//  originally Created by Eberhard Mayer on 16.08.18. / OS 10.03.2022
 //  Copyright © 2018 Eberhard Mayer. All rights reserved.
 //
-#define VERSION "2022.03.09.0" //Delta
+#define VERSION "2022.03.10.0" //Delta
 #ifndef E3DC_CONF_h
 #define E3DC_CONF_h
 
@@ -45,7 +45,7 @@ typedef struct {
     char aes_password[128];
     char logfile[128],conffile[128];
     char openWBhost[128];
-    bool wallbox,ext1,ext2,ext3,ext7,debug,htsat,htsun,openWB,aWATTar,regelungaktiv;
+    bool wallbox,ext1,ext2,ext3,ext7,debug,htsat,htsun,openWB,aWATTar,regelungaktiv, parabel;
     uint8_t wurzelzaehler,ladeschwelle, ladeende, ladeende2, unload, AWtest;
     int32_t ht, untererLadekorridor, obererLadekorridor, minimumLadeleistung, maximumLadeleistung, wrleistung, peakshave, peakshsoc, wbmode, wbminlade;
     float_t speichergroesse,regelzeitende, regelzeitbeginn, sommerladeende, einspeiselimit, jahreszeitkorrektur, hton, htoff, htsockel, wbminSoC, breite, laenge, Avhourly, AWDiff, AWAufschlag;

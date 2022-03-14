@@ -193,3 +193,12 @@ exit 0
 Richtig herunterfahren
 
 `sudo shutdown -h 0`
+
+Nach Neustart:
+Beim Anmelden unter ssh dann einfach "screen -r" eingeben und man kommt auf die E3DC-Ausgabe
+Verlassen der Ausgabe mit "Strg+a" dann "d" (das E3DC-Control läuft im Hintergrund in der screen-console weiter
+
+Infos zu Screen, siehe unter:
+https://ovks.de/2018/07/wie-du-ganz-simpel-via-ssh-mehrere-prozesse-verwalten-kannst-mit-screen/
+https://raspi.tv/2012/using-screen-with-raspberry-pi-to-avoid-leaving-ssh-sessions-open
+

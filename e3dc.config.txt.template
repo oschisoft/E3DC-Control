@@ -11,12 +11,12 @@ breite = 52.516
 laenge = 10.145
 # Längengrand dezimal E3DC-Standort: 10.145 Grad E (östl. Länge)
 
-# debug = true
-# logfile = /mnt/ramdisk/logfile_e3dc
-
-wallbox = false         
-ext1 = false				
-ext2 = false
+#debug = true
+#logfile = /mnt/ramdisk/logfile_e3dc
+#parabel = true
+#wallbox = false         
+#ext1 = false				
+#ext2 = false
 wurzelzaehler = 0		
 einspeiselimit = 5.3
 untererLadekorridor = 300  
