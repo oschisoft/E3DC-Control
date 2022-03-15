@@ -1,4 +1,4 @@
-// ---- Hauptprogramm E3DC-Laderegelung, Version 2022.03.09 ---- //
+// ---- Hauptprogramm E3DC-Laderegelung, Version 2022.03.15 ---- //
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -851,9 +851,10 @@ bDischarge = false;
 				// iFc = fRestEnergie*3/2*fParabelY / (tLadezeitende-t); // Alternative Bestimmung LadeLeistung mit Faktor 3/2
 				printf("ReqL %i W ", iE3DC_Req_Load);
                 WriteLog();
-                if (fAvBatterie < iE3DC_Req_Load - 300) e3dc_config.obererLadekorridor = e3dc_config.maximumLadeleistung; // max. Ladeleistung freigeben, wenn z.B. Sonne weg bleibt
+                // Sonderfälle und Grenzen:
 				if (iFc < e3dc_config.untererLadekorridor) iFc = e3dc_config.untererLadekorridor; // Sockel für Mindestladeleistung
 				if (iFc > e3dc_config.obererLadekorridor) iFc = e3dc_config.obererLadekorridor;  // zur Sicherheit und für breites Maximum
+				if ((iFc == e3dc_config.obererLadekorridor)&&(fAvBatterie < iE3DC_Req_Load - 300)) iFc = e3dc_config.maximumLadeleistung; // max. Ladeleistung freigeben, wenn z.B. Sonne weg bleibt
 				printf("iFC %i W \n", int(iFc));
 				sprintf(Log,"pCTL %s SOC=%0.02f X=%0.02f Y=%0.02f ReqL=%i iPwrB=%i Delta=%0.02f AVB=%0.1f Fc=%i grid=%0.1f",strtok(asctime(ts),"\n"),fBatt_SOC, fParabelX, fParabelY, iE3DC_Req_Load, iPower_Bat, fKorrekturFaktor, fAvBatterie, iFc, fPower_Grid);
                 WriteLog();

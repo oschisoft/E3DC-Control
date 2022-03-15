@@ -1,3 +1,10 @@
+Version  2022.03.15.0 
+
+Parameter "parabel" hinzu: Ladekurve in Parabelform über Mittag, d.h. in Anlehnung an die PV-Erzeugungskurve =>Vorteile: 
+1. kontante "freie Solarleistung", d.h. weniger Auswirkung des Hausverbrauchs auf die Ladekurve, 
+2. ab dem Mittagsmaximum sorgt die Parabel besser vor, falls die PV-Erzeugung zurück geht
+3. die Ladekurve macht es unwahrscheinlich, überhaupt noch in die Abregelung zu kommen, ansonsten lässt sich über den unload-Wert nachsteuern
+
 Version  2022.02.23.0 
 
 Parameter ersetzt bzw. neu eingefügt:
