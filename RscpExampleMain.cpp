@@ -66,6 +66,7 @@ static int32_t iFc, iMinLade,iMinLade2; // Mindestladeladeleistung des E3DC Spei
 static float_t fL1V=230,fL2V=230,fL3V=230;
 static int iDischarge = -1;
 static bool bDischarge = false, bDischargeDone;  // Wenn false, wird das Entladen blockiert, unabhängig von dem vom Portal gesetzen wert
+static bool bE3DCset = false;  // True wenn Ladeleistung in E3DC kommandiert wird
 char cWBALG;
 static bool bWBLademodus; // Lademodus der Wallbox; z.B. Sonnenmodus
 static bool bWBChanged; // Lademodus der Wallbox; wurde extern geändertz.B. Sonnenmodus
@@ -1694,6 +1695,7 @@ int createRequestExample(SRscpFrameBuffer * frameBuffer) {
 			protocol.appendValue(&rootValue, PMContainer);
 			// free memory of sub-container as it is now copied to rootValue
 			protocol.destroyValueData(PMContainer);
+			bE3DCset = true;
 			}
         }
 
@@ -2612,8 +2614,9 @@ int handleResponseValue(RscpProtocol *protocol, SRscpValue *response)
                         }
                         if(e3dc_config.regelungaktiv){
                             printf("noPLU: Regelung aktiv "); 
-                            if (iLMStatus < 6) printf(" STBY %i", iLMStatus);
-                            if (iLMStatus == 6) printf(" ReqL setzen %i W ", iE3DC_Req_Load);
+                            if (!bE3DCset) printf("STBY %i ", iLMStatus);
+                            if ((iLMStatus == 6)&&(bE3DCset)) printf(" ReqL setzen %i W ", iE3DC_Req_Load);
+                            bE3DCset = false;
                             }
 						 else printf("PLU: Regelung deaktiviert ");
                         break;
