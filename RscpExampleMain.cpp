@@ -1,4 +1,4 @@
-// ---- Hauptprogramm E3DC-Laderegelung, Version 2022.03.15 ---- //
+// ---- Hauptprogramm E3DC-Laderegelung, Version 2022.03.18 ---- //
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -394,7 +394,7 @@ bool GetConfig()
         e3dc_config.breite = 50; 	// Standort E3DC in e3dc_config eintragen!
         e3dc_config.laenge = 10;    // Standort E3DC in e3dc_config eintragen!
         e3dc_config.aWATTar = false;
-        e3dc_config.regelungaktiv = true;  // opt. Deaktivieren von E3DC-Control mittels App-Schalter POWERSAVE_ENABLED
+        e3dc_config.regelungaktiv = true;  // opt. Deaktivieren von E3DC-Control mittels App-Schalter POWER_LIMITS_USED
         e3dc_config.parabel = false; // Vorbelegung lineares Laden über der Ladezeit, zum Ändern parabel = true in Konfigdatei aufnehmen
         e3dc_config.Avhourly = 10;   // geschätzter stündlicher Verbrauch in %
         e3dc_config.AWDiff = 100;   // Differenzsockel in €/MWh
@@ -2575,12 +2575,7 @@ int handleResponseValue(RscpProtocol *protocol, SRscpValue *response)
                         ucPMIndex = protocol->getValueAsUChar8(&PMData[i]);
                         break;
                     }
-                    case TAG_EMS_POWER_LIMITS_USED: {              // response for POWER_LIMITS_USED
-                        if (protocol->getValueAsBool(&PMData[i])){
-                            printf("PLU ");
-                            }
-                        break;
-                    }
+                   
                     case TAG_EMS_MAX_CHARGE_POWER: {              // 101 response for TAG_EMS_MAX_CHARGE_POWER
                         uint32_t uPower = protocol->getValueAsUInt32(&PMData[i]);
                         //if (uPower < e3dc_config.maximumLadeleistung)
@@ -2601,20 +2596,26 @@ int handleResponseValue(RscpProtocol *protocol, SRscpValue *response)
                         break;
                     }
                     case TAG_EMS_POWERSAVE_ENABLED: {              //104 response for TAG_EMS_POWERSAVE_ENABLED
-                         e3dc_config.regelungaktiv = protocol->getValueAsBool(&PMData[i]);
-                         if(e3dc_config.regelungaktiv){
-                            printf("PSE Regelung aktiv"); 
-                            if (iLMStatus < 6) printf(" Standby %i", iLMStatus);
-                            if (iLMStatus == 6) printf(" ReqL setzen %i W ", iE3DC_Req_Load);
-						}
-                            else
-                            printf("Regelung deaktiviert ");
+                         if (protocol->getValueAsBool(&PMData[i])){
+                            printf("PSE ");
+                            }
+                        break;
+                     }
+                     case TAG_EMS_POWER_LIMITS_USED: {              // response for POWER_LIMITS_USED
+                       e3dc_config.regelungaktiv = !(protocol->getValueAsBool(&PMData[i]));
+                        // Ausgabe PLU siehe unten bei WRC
                         break;
                     }
                     case TAG_EMS_WEATHER_REGULATED_CHARGE_ENABLED: {//105 resp WEATHER_REGULATED_CHARGE_ENABLED
                         if (protocol->getValueAsBool(&PMData[i])){
                             printf("WRC ");
                         }
+                        if(e3dc_config.regelungaktiv){
+                            printf("noPLU: Regelung aktiv "); 
+                            if (iLMStatus < 6) printf(" STBY %i", iLMStatus);
+                            if (iLMStatus == 6) printf(" ReqL setzen %i W ", iE3DC_Req_Load);
+                            }
+						 else printf("PLU: Regelung deaktiviert ");
                         break;
                     }
                         // ...

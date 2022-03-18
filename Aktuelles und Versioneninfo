@@ -1,3 +1,11 @@
+Version  2022.03.18.0 
+
+Abschaltung der Regelung geändert:
+- Deaktivieren von E3DC-Control mittels App-Schalter POWER_LIMITS_USED
+POWER_LIMITS_USED => Regelung aus/deaktiviert, bzw.  
+POWER_LIMITS_USED = false => Regelung aktiv
+
+
 Version  2022.03.15.0 
 
 Parameter "parabel" hinzu: Ladekurve in Parabelform über Mittag, d.h. in Anlehnung an die PV-Erzeugungskurve =>Vorteile: 
