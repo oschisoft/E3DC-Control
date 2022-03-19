@@ -814,9 +814,9 @@ bDischarge = false;
 // Berechnen der Ladeleistung bis zum nächstliegenden Zeitpunkt
                        
         iFc = (fLadeende - fBatt_SOC)*e3dc_config.speichergroesse*10*3600; // OS: iFc Restladung in Ws (Wattsekunden)
-          if ((tLadezeitende-t) > 300)		// wenn mehr als 5 min bis zum Ladezeitende
+          if ((tLadezeitende-t) > 200)		// wenn mehr als 5 min bis zum Ladezeitende
               iFc = iFc / (tLadezeitende-t); else  // Restladeleistung in Watt bis Ladezeitende
-          iFc = iFc/(300) + e3dc_config.untererLadekorridor; // sonst wird es nicht fertig/voll!
+          iFc = iFc/(150) + e3dc_config.untererLadekorridor; // sonst wird es nicht fertig/voll!
           if (iFc > e3dc_config.maximumLadeleistung)
               iMinLade = e3dc_config.maximumLadeleistung;
           else
