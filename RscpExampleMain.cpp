@@ -1,4 +1,4 @@
-// ---- Hauptprogramm E3DC-Laderegelung, Version 2022.03.18 ---- //
+// ---- Hauptprogramm E3DC-Laderegelung, Version 2022.03.19 ---- //
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
