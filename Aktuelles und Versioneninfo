@@ -1,3 +1,7 @@
+Version  2022.03.22.0 
+Kleine Korrekturen, Anzeige und Parabel-Ladeende. Mit untererLadekorridor = 300W wird das Ladezeitende 
+3 min früher als Vorgabewert  erreicht. 
+
 Version  2022.03.19.0 
 Anzeige "no:PLU Regelung aktiv" korrigiert. Zeigt iLMStatus an, außer wenn Ladeleistung in E3DC gesetzt wird.
 

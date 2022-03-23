@@ -1,4 +1,4 @@
-// ---- Hauptprogramm E3DC-Laderegelung, Version 2022.03.19 ---- //
+// ---- Hauptprogramm E3DC-Laderegelung, Version 2022.03.22 ---- //
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -593,11 +593,11 @@ int LoadDataProcess(SRscpFrameBuffer * frameBuffer) {
 #
     
     
-    // --- ÄNDERUNGEN FEB. 2022 ----//
+    // --- ÄNDERUNGEN FEB./MÄR 2022 ----//
     
-    float fLadeende = e3dc_config.ladeende;   //float Vorgabe Batteriestand in % zum Ladeende z.B. 96 = 96%
-    float fLadeende2 = e3dc_config.ladeende2;
-    float fLadeende3 = e3dc_config.unload;
+    float fLadeende = e3dc_config.ladeende;   //float Vorgabe Batteriestand in % zum Regelzeitende z.B. 96 = 96%
+    float fLadeende2 = e3dc_config.ladeende2; //float Vorgabe Batteriestand in % zum Ladezeitende z.B. 100 = 100%
+    float fLadeende3 = e3dc_config.unload;	//float Vorgabe Batteriestand in % zum Regelzeitbeginn z.B. 40 = 40%
     float jzkorr = e3dc_config.jahreszeitkorrektur;
 				//Jahreszeitkorrektur des Regelzeitraumes in Prozent: max. Regelzeitraum wird für Sommer (21.06.) angegeben. 
 				// Jahreszeitkorrektur 55% bedeutet, dass sich der Regelzeitraum am 21.12. auf 55% des Sommer-Regelzeitraumes verkleinert. 
@@ -679,7 +679,7 @@ if (                             // Das Entladen aus dem Speicher
    ){
             // ENdladen einschalten)
         if ((iPower_Bat == 0)&&(fPower_Grid>100)&&fBatt_SOC>0.5)
-{            sprintf(Log,"BAT %s %0.02f %i %i% 0.02f",strtok(asctime(ts),"\n"),fBatt_SOC, iE3DC_Req_Load, iPower_Bat, fPower_Grid);
+{            sprintf(Log,"BAT %s SOC=%0.02f ReqL=%i iPwrB=%i% grid=0.02f",strtok(asctime(ts),"\n"),fBatt_SOC, iE3DC_Req_Load, iPower_Bat, fPower_Grid);
         WriteLog();
     iLMStatus = 10;
 }
@@ -814,9 +814,9 @@ bDischarge = false;
 // Berechnen der Ladeleistung bis zum nächstliegenden Zeitpunkt
                        
         iFc = (fLadeende - fBatt_SOC)*e3dc_config.speichergroesse*10*3600; // OS: iFc Restladung in Ws (Wattsekunden)
-          if ((tLadezeitende-t) > 200)		// wenn mehr als 5 min bis zum Ladezeitende
+          if ((tLadezeitende-t) > 180)		// solange mehr als 3 min bis zum Ladezeitende
               iFc = iFc / (tLadezeitende-t); else  // Restladeleistung in Watt bis Ladezeitende
-          iFc = iFc/(150) + e3dc_config.untererLadekorridor; // sonst wird es nicht fertig/voll!
+          iFc = iFc/(180) + e3dc_config.untererLadekorridor; // sonst wird es nicht fertig/voll!
           if (iFc > e3dc_config.maximumLadeleistung)
               iMinLade = e3dc_config.maximumLadeleistung;
           else
@@ -834,7 +834,7 @@ bDischarge = false;
           // Beginn Bestimmung Ladeleistung in Parabelform, sofern parabel in Konfig ausgewählt
 				
 				if ((t > tRegelzeitbeginn)&&(t < tLadezeitende)&&(e3dc_config.parabel)){
-				fRestEnergie = (fLadeende - fBatt_SOC)*e3dc_config.speichergroesse*10*3600; // OS: offene Restladung in Ws (Wattsekunden)
+				fRestEnergie = (fLadeende2 - fBatt_SOC)*e3dc_config.speichergroesse*10*3600; // OS: offene Restladung in Ws (Wattsekunden) bis LZE
 				// printf("RZB %i s ", tRegelzeitbeginn);
 				// printf("LZE %i s ", tLadezeitende);
 				// printf("t= %i s ", t);
@@ -857,7 +857,7 @@ bDischarge = false;
 				if (iFc > e3dc_config.obererLadekorridor) iFc = e3dc_config.obererLadekorridor;  // zur Sicherheit und für breites Maximum
 				//if ((iFc == e3dc_config.obererLadekorridor)&&(fAvBatterie < iE3DC_Req_Load - 300)) iFc = e3dc_config.maximumLadeleistung; // max. Ladeleistung freigeben, wenn z.B. Sonne weg bleibt
 				printf("iFC %i W \n", int(iFc));
-				sprintf(Log,"pCTL %s SOC=%0.02f X=%0.02f Y=%0.02f ReqL=%i iPwrB=%i Delta=%0.02f AVB=%0.1f Fc=%i grid=%0.1f",strtok(asctime(ts),"\n"),fBatt_SOC, fParabelX, fParabelY, iE3DC_Req_Load, iPower_Bat, fKorrekturFaktor, fAvBatterie, iFc, fPower_Grid);
+				sprintf(Log,"pCTL %s SOC=%0.02f X=%0.02f Y=%0.02f ReqL=%i iPwrB=%i pKF=%0.02f AVB=%0.1f iFc=%i grid=%0.1f",strtok(asctime(ts),"\n"),fBatt_SOC, fParabelX, fParabelY, iE3DC_Req_Load, iPower_Bat, fKorrekturFaktor, fAvBatterie, iFc, fPower_Grid);
                 WriteLog();
 				iMinLade = iFc;
 				}   // Ende Bestimmung Ladeleistung in Parabelform
@@ -1013,7 +1013,7 @@ bDischarge = false;
                             }
                             else
                                 iPower = e3dc_config.maximumLadeleistung;}
-// Wenn die angeforderte Leistung großer ist als die vorhandene Leistung
+// Wenn die angeforderte Leistung größer ist als die vorhandene Leistung
 // wird auf Automatik umgeschaltet, d.h. Anforderung Maximalleistung;
 //                        if (iPower >0)
 //                        ControlLoadData(frameBuffer,(iPower+iDiffLadeleistung),3);
@@ -1036,7 +1036,7 @@ bDischarge = false;
                                 {   iLMStatus = 3;
                                     if (iLastReq>0){
                                     //sprintf(Log,"CTL %s %0.02f %i %i %0.02f",strtok(asctime(ts),"\n"),fBatt_SOC, iE3DC_Req_Load, iPower_Bat, fPower_Grid);
-                                    sprintf(Log,"3CTL %s SOC=%0.02f X=%0.1f Y=%0.1f ReqL=%i iPwrB=%i iFc=%i grid=%0.02f",strtok(asctime(ts),"\n"),fBatt_SOC, fParabelX, fParabelY, iE3DC_Req_Load, iPower_Bat, iFc, fPower_Grid);
+									sprintf(Log,"3CTL %s SOC=%0.02f X=%0.02f Y=%0.02f ReqL=%i iPwrB=%i pKF=%0.02f AVB=%0.1f iFc=%i grid=%0.1f",strtok(asctime(ts),"\n"),fBatt_SOC, fParabelX, fParabelY, iE3DC_Req_Load, iPower_Bat, fKorrekturFaktor, fAvBatterie, iFc, fPower_Grid);
 									WriteLog();
                                         iLastReq--;}
                                         }
@@ -1049,8 +1049,9 @@ bDischarge = false;
                                     }else
                                 iLMStatus = -6;
                                 iLastReq = 6;
-                                sprintf(Log,"6CTL %s SOC=%0.02f X=%0.1f Y=%0.1f ReqL=%i iPwrB=%i iFc=%i grid=%0.02f",strtok(asctime(ts),"\n"),fBatt_SOC, fParabelX, fParabelY, iE3DC_Req_Load, iPower_Bat, iFc, fPower_Grid);
-								WriteLog();}
+								sprintf(Log,"6CTL %s SOC=%0.02f X=%0.02f Y=%0.02f ReqL=%i iPwrB=%i pKF=%0.02f AVB=%0.1f iFc=%i grid=%0.1f",strtok(asctime(ts),"\n"),fBatt_SOC, fParabelX, fParabelY, iE3DC_Req_Load, iPower_Bat, fKorrekturFaktor, fAvBatterie, iFc, fPower_Grid);
+								WriteLog();
+								}
                             } else
                             iLMStatus = 11;
                             }
@@ -2615,7 +2616,7 @@ int handleResponseValue(RscpProtocol *protocol, SRscpValue *response)
                         if(e3dc_config.regelungaktiv){
                             printf("noPLU: Regelung aktiv "); 
                             if (!bE3DCset) printf("STBY %i ", iLMStatus);
-                            if ((iLMStatus == 6)&&(bE3DCset)) printf(" ReqL setzen %i W ", iE3DC_Req_Load);
+                            if ((iLMStatus == 6)&&(bE3DCset)) printf("ReqL setzen %i W ", iE3DC_Req_Load);
                             bE3DCset = false;
                             }
 						 else printf("PLU: Regelung deaktiviert ");
